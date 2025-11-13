@@ -1,1 +1,231 @@
 node_modules
+
+
+# """
+# Flask backend for disease classification (Diabetes, BP, Dyslipidemia)
+# Automatically loads models and handles prediction requests
+# """
+# import os
+# import sys
+# import types
+# import traceback
+# import numpy as np
+# import pandas as pd
+# import joblib
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+
+# # ---------------------- Prevent pickle import errors ----------------------
+# target = types.SimpleNamespace(dtype='float64')
+# sys.modules['target'] = target
+# print("✅ Created 'target' module\n")
+
+# # ---------------------- Flask setup ----------------------
+# app = Flask(__name__)
+# CORS(app)
+
+# # ---------------------- Config ----------------------
+# MODELS_DIR = "models"
+
+# ALL_FEATURES = [
+#     'age', 'sex', 'weight', 'height', 'bmi', 'heart_rate',
+#     'bp_systolic', 'bp_diastolic', 'blood_sugar', 'HbA1c',
+#     'cholesterol', 'LDL_C', 'HDL_C', 'Triglycerides',
+#     'exercise_hours', 'smoking', 'alcohol_consumption'
+# ]
+
+# CLASS_NAMES = {
+#     "Diabetes_Class": ["Normal", "Prediabetes", "Diabetes"],
+#     "BP_Class": ["Normal", "Pre-hypertension", "Hypertension"],
+#     "Dyslipidemia_Class": ["No", "Borderline", "Yes"]
+# }
+
+# models = {}
+# model_features = {}
+
+# # ---------------------- Helper functions ----------------------
+# def get_model_features(model):
+#     """Extract which features a model expects"""
+#     try:
+#         if hasattr(model, 'feature_names_in_'):
+#             return list(model.feature_names_in_)
+#         if hasattr(model, 'steps'):
+#             for _, step in model.steps:
+#                 if hasattr(step, 'feature_names_in_'):
+#                     return list(step.feature_names_in_)
+#         if hasattr(model, 'named_steps'):
+#             for _, step in model.named_steps.items():
+#                 if hasattr(step, 'feature_names_in_'):
+#                     return list(step.feature_names_in_)
+#         return None
+#     except Exception:
+#         return None
+
+# def load_models():
+#     """Load all models safely and unwrap if stored inside dicts"""
+#     print(f"\n📁 Models directory: {os.path.abspath(MODELS_DIR)}")
+
+#     if not os.path.exists(MODELS_DIR):
+#         print("❌ Models directory not found!")
+#         return {}, {}
+
+#     model_files = [f for f in os.listdir(MODELS_DIR) if f.endswith(('.pkl', '.joblib'))]
+#     print(f"📂 Found {len(model_files)} model files\n")
+
+#     loaded_models = {}
+#     features_map = {}
+
+#     diseases = ["Diabetes_Class", "BP_Class", "Dyslipidemia_Class"]
+#     model_types = ["LogisticRegression", "RandomForest", "GradientBoosting"]
+
+#     for disease in diseases:
+#         loaded_models[disease] = {}
+#         features_map[disease] = {}
+
+#         for model_type in model_types:
+#             for ext in ['.joblib', '.pkl']:
+#                 filename = f"classifier_{disease}__{model_type}{ext}"
+#                 filepath = os.path.join(MODELS_DIR, filename)
+#                 if not os.path.exists(filepath):
+#                     continue
+
+#                 try:
+#                     model = joblib.load(filepath)
+#                     print(f"🔹 Loaded {filename} type: {type(model)}")
+
+#                     # --- Unwrap model dictionaries recursively ---
+#                     unwrap_attempts = 0
+#                     while not hasattr(model, "predict") and unwrap_attempts < 5:
+#                         unwrap_attempts += 1
+#                         if isinstance(model, dict):
+#                             for key in [
+#                                 'pipeline', 'model', 'classifier', 'estimator',
+#                                 'clf', 'rf', 'gb', 'final_model', 'model_obj'
+#                             ]:
+#                                 if key in model:
+#                                     model = model[key]
+#                                     break
+#                             else:
+#                                 if len(model) == 1:
+#                                     model = next(iter(model.values()))
+#                                 else:
+#                                     break
+#                         elif isinstance(model, (list, tuple)):
+#                             model = model[0]
+#                         else:
+#                             break
+
+#                     if not hasattr(model, "predict"):
+#                         print(f"⚠️ Skipped {filename} (no .predict method after extraction)")
+#                         continue
+
+#                     required_features = get_model_features(model)
+#                     loaded_models[disease][model_type] = model
+#                     features_map[disease][model_type] = required_features
+
+#                     feat_str = f"{len(required_features)} features" if required_features else "Unknown features"
+#                     print(f"✅ Loaded {disease:20} | {model_type:20} | {feat_str}")
+
+#                 except Exception as e:
+#                     print(f"❌ {filename}: {str(e)[:120]}")
+#                     traceback.print_exc()
+
+#     total = sum(len(m) for m in loaded_models.values())
+#     print(f"\n🤖 Loaded: {total}/9 models\n")
+#     return loaded_models, features_map
+
+# def prepare_features_for_model(data, feature_list):
+#     """Convert request JSON to pandas DataFrame for ColumnTransformer models"""
+#     if feature_list is None:
+#         feature_list = ALL_FEATURES
+#     row = {col: float(data.get(col, np.nan)) for col in feature_list}
+#     return pd.DataFrame([row], columns=feature_list)
+
+# # ---------------------- Load models on startup ----------------------
+# models, model_features = load_models()
+
+# # ---------------------- Routes ----------------------
+# @app.route("/", methods=["GET"])
+# def home():
+#     return jsonify({
+#         "status": "running",
+#         "message": "Disease Classification API",
+#         "models_loaded": sum(len(m) for m in models.values())
+#     })
+
+# @app.route("/api/health", methods=["GET"])
+# def health():
+#     loaded = {d: list(models[d].keys()) for d in models}
+#     missing = {d: [m for m in ["LogisticRegression", "RandomForest", "GradientBoosting"]
+#                    if m not in models[d]] for d in models}
+#     return jsonify({
+#         "status": "healthy" if sum(len(m) for m in models.values()) > 0 else "no models",
+#         "models_loaded": loaded,
+#         "missing_models": missing,
+#         "total": sum(len(m) for m in models.values())
+#     })
+
+# @app.route("/api/predict", methods=["POST"])
+# def predict():
+#     try:
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "No data provided"}), 400
+
+#         predictions = {}
+#         for disease in ["Diabetes_Class", "BP_Class", "Dyslipidemia_Class"]:
+#             if disease not in models or not models[disease]:
+#                 predictions[disease] = {"error": "No models available"}
+#                 continue
+
+#             for model_type in ["RandomForest", "GradientBoosting", "LogisticRegression"]:
+#                 if model_type not in models[disease]:
+#                     continue
+
+#                 model = models[disease][model_type]
+#                 required_features = model_features[disease].get(model_type)
+#                 features = prepare_features_for_model(data, required_features)
+
+#                 try:
+#                     pred = model.predict(features)[0]
+#                     class_names = CLASS_NAMES[disease]
+#                     predicted_class = class_names[int(pred)] if int(pred) < len(class_names) else f"Class {pred}"
+
+#                     confidence, probabilities = None, None
+#                     if hasattr(model, 'predict_proba'):
+#                         proba = model.predict_proba(features)[0]
+#                         confidence = float(np.max(proba))
+#                         probabilities = {class_names[i]: float(p) for i, p in enumerate(proba)}
+
+#                     predictions[disease] = {
+#                         "prediction": predicted_class,
+#                         "confidence": confidence,
+#                         "probabilities": probabilities,
+#                         "model_used": model_type
+#                     }
+#                     break  # use first successful model
+
+#                 except Exception as e:
+#                     print(f"❌ Prediction error for {disease}-{model_type}: {e}")
+#                     traceback.print_exc()
+#                     predictions[disease] = {"error": str(e)}
+#                     break
+
+#         return jsonify({"predictions": predictions})
+
+#     except Exception as e:
+#         print(f"❌ Server Error: {e}")
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# # ---------------------- Run Flask ----------------------
+# if __name__ == "__main__":
+#     print("=" * 60)
+#     print("🌐 Flask Server Ready on port 5001")
+#     print("=" * 60)
+#     print(f"📍 http://localhost:5001")
+#     print(f"🔗 http://localhost:5001/api/predict")
+#     print("=" * 60)
+#     print("\nPress CTRL+C to stop\n")
+
+#     app.run(host='0.0.0.0', port=5001, debug=False, use_reloader=False)

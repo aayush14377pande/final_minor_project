@@ -1,415 +1,294 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import joblib
+"""
+Flask backend for disease classification (Diabetes, BP, Dyslipidemia)
+Automatically loads models and handles prediction requests
+"""
 import os
+import sys
+import types
+import traceback
 import numpy as np
 import pandas as pd
-from pathlib import Path
-import traceback
+import joblib
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
+# ---------------------- Prevent pickle import errors ----------------------
+target = types.SimpleNamespace(dtype='float64')
+sys.modules['target'] = target
+print("✅ Created 'target' module\n")
+
+# ---------------------- Flask setup ----------------------
 app = Flask(__name__)
+CORS(app)
 
-# FIX: Comprehensive CORS configuration
-CORS(app, resources={
-    r"/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "*"],
-        "methods": ["GET", "POST", "PUT", "DELETE"],
-        "allow_headers": ["Content-Type", "Authorization", "Accept"]
-    }
-})
+# ---------------------- Config ----------------------
+MODELS_DIR = "models"
 
-# Configuration
-MODEL_DIR = os.getenv('MODEL_DIR', './models')  # Make sure this points to your models folder
+ALL_FEATURES = [
+    'age', 'sex', 'weight', 'height', 'bmi', 'heart_rate',
+    'bp_systolic', 'bp_diastolic', 'blood_sugar', 'HbA1c',
+    'cholesterol', 'LDL_C', 'HDL_C', 'Triglycerides',
+    'exercise_hours', 'smoking', 'alcohol_consumption'
+]
 
-# Available classifiers and their models
-AVAILABLE_CLASSIFIERS = {
-    'BP_Class': ['GradientBoosting', 'LogisticRegression', 'RandomForest'],
-    'Diabetes_Class': ['GradientBoosting', 'LogisticRegression', 'RandomForest'],
-    'Dyslipidemia_Class': ['GradientBoosting', 'LogisticRegression', 'RandomForest']
+CLASS_NAMES = {
+    "Diabetes_Class": ["Normal", "Prediabetes", "Diabetes"],
+    "BP_Class": ["Normal", "Pre-hypertension", "Hypertension"],
+    "Dyslipidemia_Class": ["No", "Borderline", "Yes"]
 }
 
-# Default model selection for each classifier
-DEFAULT_MODELS = {
-    'BP_Class': 'GradientBoosting',
-    'Diabetes_Class': 'GradientBoosting',
-    'Dyslipidemia_Class': 'GradientBoosting'
-}
+models = {}
+model_features = {}
 
-# Cache for loaded models
-model_cache = {}
-
-def load_model(classifier, model_type):
-    """Load model with caching and handle both dict and direct model formats"""
-    cache_key = f"{classifier}__{model_type}"
-    
-    if cache_key not in model_cache:
-        model_path = os.path.join(MODEL_DIR, f"classifier_{classifier}__{model_type}.pkl")
-        
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Model file not found: {model_path}")
-        
-        loaded_obj = joblib.load(model_path)
-        
-        # Handle different model storage formats
-        if isinstance(loaded_obj, dict):
-            print(f"⚠️  Model loaded as dict. Keys: {loaded_obj.keys()}")
-            
-            # Try common dictionary keys
-            if 'model' in loaded_obj:
-                model = loaded_obj['model']
-                print(f"✓ Extracted model from 'model' key")
-            elif 'pipeline' in loaded_obj:
-                model = loaded_obj['pipeline']
-                print(f"✓ Extracted model from 'pipeline' key")
-            elif 'classifier' in loaded_obj:
-                model = loaded_obj['classifier']
-                print(f"✓ Extracted model from 'classifier' key")
-            elif 'estimator' in loaded_obj:
-                model = loaded_obj['estimator']
-                print(f"✓ Extracted model from 'estimator' key")
-            else:
-                # Print all keys to help debug
-                print(f"❌ Could not find model in dict. Available keys: {list(loaded_obj.keys())}")
-                raise ValueError(f"Model dict does not contain expected keys. Found: {list(loaded_obj.keys())}")
-            
-            model_cache[cache_key] = model
-        else:
-            # Direct model object
-            model_cache[cache_key] = loaded_obj
-            print(f"✓ Loaded model directly: {cache_key}")
-    
-    return model_cache[cache_key]
-
-def prepare_input_dataframe(input_data):
-    """Convert input dict/list to DataFrame with proper type handling"""
-    if isinstance(input_data, list):
-        df = pd.DataFrame(input_data)
-    else:
-        df = pd.DataFrame([input_data])
-    
-    # Convert all columns to numeric, handling None/null values
-    for col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-    
-    # Check for NaN values
-    if df.isnull().any().any():
-        nan_cols = df.columns[df.isnull().any()].tolist()
-        raise ValueError(f"Invalid or missing numeric values in fields: {', '.join(nan_cols)}")
-    
-    return df
-
-def get_feature_names_from_model(model):
-    """Extract feature names from model pipeline"""
-    try:
-        if hasattr(model, 'named_steps') and 'prep' in model.named_steps:
-            prep = model.named_steps['prep']
-            if hasattr(prep, 'transformers_'):
-                feature_names = []
-                for name, transformer, columns in prep.transformers_:
-                    if columns != 'drop' and isinstance(columns, list):
-                        feature_names.extend(columns)
-                return feature_names
-    except:
-        pass
-    
-    # Try to get feature names from the model directly
+# ---------------------- Helper functions ----------------------
+def get_model_features(model):
+    """Extract which features a model expects"""
     try:
         if hasattr(model, 'feature_names_in_'):
-            return model.feature_names_in_.tolist()
-    except:
-        pass
-    
-    return None
+            return list(model.feature_names_in_)
+        if hasattr(model, 'steps'):
+            for _, step in model.steps:
+                if hasattr(step, 'feature_names_in_'):
+                    return list(step.feature_names_in_)
+        if hasattr(model, 'named_steps'):
+            for _, step in model.named_steps.items():
+                if hasattr(step, 'feature_names_in_'):
+                    return list(step.feature_names_in_)
+        return None
+    except Exception:
+        return None
 
-# Add this debug middleware to see incoming requests
-@app.before_request
-def log_request_info():
-    print(f"📥 Incoming {request.method} request to {request.path}")
-    print(f"📦 Headers: {dict(request.headers)}")
-    print(f"🔍 Query params: {request.args}")
-    if request.is_json:
-        print(f"📄 JSON data: {request.get_json()}")
-    else:
-        print(f"📄 Form data: {request.form}")
+def load_models():
+    """Load all models safely and unwrap if stored inside dicts"""
+    print(f"\n📁 Models directory: {os.path.abspath(MODELS_DIR)}")
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
+    if not os.path.exists(MODELS_DIR):
+        print("❌ Models directory not found!")
+        return {}, {}
+
+    model_files = [f for f in os.listdir(MODELS_DIR) if f.endswith(('.pkl', '.joblib'))]
+    print(f"📂 Found {len(model_files)} model files\n")
+
+    loaded_models = {}
+    features_map = {}
+
+    diseases = ["Diabetes_Class", "BP_Class", "Dyslipidemia_Class"]
+    model_types = ["LogisticRegression", "RandomForest", "GradientBoosting"]
+
+    for disease in diseases:
+        loaded_models[disease] = {}
+        features_map[disease] = {}
+
+        for model_type in model_types:
+            for ext in ['.joblib', '.pkl']:
+                filename = f"classifier_{disease}__{model_type}{ext}"
+                filepath = os.path.join(MODELS_DIR, filename)
+                if not os.path.exists(filepath):
+                    continue
+
+                try:
+                    model = joblib.load(filepath)
+                    print(f"🔹 Loaded {filename} type: {type(model)}")
+
+                    # --- Unwrap model dictionaries recursively ---
+                    unwrap_attempts = 0
+                    while not hasattr(model, "predict") and unwrap_attempts < 5:
+                        unwrap_attempts += 1
+                        if isinstance(model, dict):
+                            for key in [
+                                'pipeline', 'model', 'classifier', 'estimator',
+                                'clf', 'rf', 'gb', 'final_model', 'model_obj'
+                            ]:
+                                if key in model:
+                                    model = model[key]
+                                    break
+                            else:
+                                if len(model) == 1:
+                                    model = next(iter(model.values()))
+                                else:
+                                    break
+                        elif isinstance(model, (list, tuple)):
+                            model = model[0]
+                        else:
+                            break
+
+                    if not hasattr(model, "predict"):
+                        print(f"⚠️ Skipped {filename} (no .predict method after extraction)")
+                        continue
+
+                    required_features = get_model_features(model)
+                    loaded_models[disease][model_type] = model
+                    features_map[disease][model_type] = required_features
+
+                    feat_str = f"{len(required_features)} features" if required_features else "Unknown features"
+                    print(f"✅ Loaded {disease:20} | {model_type:20} | {feat_str}")
+
+                except Exception as e:
+                    print(f"❌ {filename}: {str(e)[:120]}")
+                    traceback.print_exc()
+
+    total = sum(len(m) for m in loaded_models.values())
+    print(f"\n🤖 Loaded: {total}/9 models\n")
+    return loaded_models, features_map
+
+def prepare_features_for_model(data, feature_list):
+    """Convert request JSON to pandas DataFrame for ColumnTransformer models"""
+    if feature_list is None:
+        feature_list = ALL_FEATURES
+    row = {col: float(data.get(col, np.nan)) for col in feature_list}
+    return pd.DataFrame([row], columns=feature_list)
+
+# ---------------------- Load models on startup ----------------------
+models, model_features = load_models()
+
+# ---------------------- Routes ----------------------
+@app.route("/", methods=["GET"])
+def home():
     return jsonify({
-        'status': 'healthy',
-        'service': 'Heart Health Classification Service',
-        'models_loaded': len(model_cache),
-        'available_classifiers': list(AVAILABLE_CLASSIFIERS.keys())
-    }), 200
+        "status": "running",
+        "message": "Disease Classification API",
+        "models_loaded": sum(len(m) for m in models.values())
+    })
 
-@app.route('/classifiers', methods=['GET'])
-def list_classifiers():
-    """List all available classifiers"""
+@app.route("/api/health", methods=["GET"])
+def health():
+    loaded = {d: list(models[d].keys()) for d in models}
+    missing = {d: [m for m in ["LogisticRegression", "RandomForest", "GradientBoosting"]
+                   if m not in models[d]] for d in models}
     return jsonify({
-        'classifiers': AVAILABLE_CLASSIFIERS,
-        'default_models': DEFAULT_MODELS
-    }), 200
+        "status": "healthy" if sum(len(m) for m in models.values()) > 0 else "no models",
+        "models_loaded": loaded,
+        "missing_models": missing,
+        "total": sum(len(m) for m in models.values())
+    })
 
-@app.route('/predict/<classifier>', methods=['POST', 'OPTIONS'])
-def predict_single(classifier):
-    """Predict single classifier with default or specified model"""
-    # Handle preflight OPTIONS request
-    if request.method == 'OPTIONS':
-        response = jsonify({'status': 'ok'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', '*')
-        response.headers.add('Access-Control-Allow-Methods', '*')
-        return response
-    
+# @app.route("/api/predict", methods=["POST"])
+# def predict():
+#     try:
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "No data provided"}), 400
+
+#         predictions = {}
+#         for disease in ["Diabetes_Class", "BP_Class", "Dyslipidemia_Class"]:
+#             if disease not in models or not models[disease]:
+#                 predictions[disease] = {"error": "No models available"}
+#                 continue
+
+#             for model_type in ["RandomForest", "GradientBoosting", "LogisticRegression"]:
+#                 if model_type not in models[disease]:
+#                     continue
+
+#                 model = models[disease][model_type]
+#                 required_features = model_features[disease].get(model_type)
+#                 features = prepare_features_for_model(data, required_features)
+
+#                 try:
+#                     pred = model.predict(features)[0]
+#                     class_names = CLASS_NAMES[disease]
+#                     predicted_class = class_names[int(pred)] if int(pred) < len(class_names) else f"Class {pred}"
+
+#                     confidence, probabilities = None, None
+#                     if hasattr(model, 'predict_proba'):
+#                         proba = model.predict_proba(features)[0]
+#                         confidence = float(np.max(proba))
+#                         probabilities = {class_names[i]: float(p) for i, p in enumerate(proba)}
+
+#                     predictions[disease] = {
+#                         "prediction": predicted_class,
+#                         "confidence": confidence,
+#                         "probabilities": probabilities,
+#                         "model_used": model_type
+#                     }
+#                     break  # use first successful model
+
+#                 except Exception as e:
+#                     print(f"❌ Prediction error for {disease}-{model_type}: {e}")
+#                     traceback.print_exc()
+#                     predictions[disease] = {"error": str(e)}
+#                     break
+
+#         return jsonify({"predictions": predictions})
+
+#     except Exception as e:
+#         print(f"❌ Server Error: {e}")
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+# @app.route("/api/predict", methods=["POST"])
+@app.route("/api/predict", methods=["POST"])
+def predict():
     try:
-        print(f"\n=== Prediction Request for {classifier} ===")
-        
-        # Validate classifier
-        if classifier not in AVAILABLE_CLASSIFIERS:
-            return jsonify({
-                'error': f'Invalid classifier. Must be one of: {", ".join(AVAILABLE_CLASSIFIERS.keys())}'
-            }), 400
-        
-        # Get input data
-        input_data = request.get_json()
-        if not input_data:
-            return jsonify({'error': 'No input data provided'}), 400
-        
-        print(f"Input data received: {input_data}")
-        
-        # Get model type from query parameter or use default
-        model_type = request.args.get('model', DEFAULT_MODELS[classifier])
-        
-        if model_type not in AVAILABLE_CLASSIFIERS[classifier]:
-            return jsonify({
-                'error': f'Invalid model type. Must be one of: {", ".join(AVAILABLE_CLASSIFIERS[classifier])}'
-            }), 400
-        
-        print(f"Using model: {model_type}")
-        
-        # Load model
-        model = load_model(classifier, model_type)
-        print(f"Model type: {type(model)}")
-        print(f"Model has predict: {hasattr(model, 'predict')}")
-        
-        # Prepare input
-        X = prepare_input_dataframe(input_data)
-        print(f"Prepared DataFrame shape: {X.shape}")
-        print(f"DataFrame columns: {X.columns.tolist()}")
-        
-        # Make prediction
-        predictions = model.predict(X)
-        print(f"Predictions: {predictions}")
-        
-        # Get probability if available
-        probabilities = None
-        if hasattr(model, 'predict_proba'):
-            try:
-                proba = model.predict_proba(X)
-                probabilities = proba.tolist()
-                print(f"Probabilities: {probabilities}")
-            except Exception as e:
-                print(f"Could not get probabilities: {str(e)}")
-        
-        # Return results
-        result = {
-            'prediction': predictions.tolist(),
-            'classifier': classifier,
-            'model': model_type,
-        }
-        
-        if probabilities:
-            result['probabilities'] = probabilities
-            result['class_labels'] = ['Negative', 'Positive']
-        
-        print(f"=== Request Successful ===\n")
-        
-        # Add CORS headers to response
-        response = jsonify(result)
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response, 200
-        
-    except ValueError as e:
-        print(f"Validation error: {str(e)}")
-        return jsonify({'error': str(e)}), 400
-    except FileNotFoundError as e:
-        print(f"Model not found: {str(e)}")
-        return jsonify({'error': str(e)}), 404
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        # Convert categorical fields to numeric if required
+        # if "sex" in data:
+        #     data["sex"] = 0 if data["sex"].lower() == "male" else 1
+        # if "smoking" in data:
+        #     data["smoking"] = 0 if data["smoking"].lower() in ["no", "none"] else 1
+        # if "alcohol_consumption" in data:
+        #     alcohol_map = {"none": 0, "light": 1, "moderate": 2, "heavy": 3}
+        #     data["alcohol_consumption"] = alcohol_map.get(data["alcohol_consumption"].lower(), np.nan)
+
+        predictions = {}
+
+        for disease in ["Diabetes_Class", "BP_Class", "Dyslipidemia_Class"]:
+            disease_results = {}
+
+            if disease not in models or not models[disease]:
+                predictions[disease] = {"error": "No models available"}
+                continue
+
+            for model_type in ["RandomForest", "GradientBoosting", "LogisticRegression"]:
+                if model_type not in models[disease]:
+                    continue
+
+                model = models[disease][model_type]
+                required_features = model_features[disease].get(model_type)
+                features = prepare_features_for_model(data, required_features)
+
+                try:
+                    pred = model.predict(features)[0]
+                    class_names = CLASS_NAMES[disease]
+                    predicted_class = class_names[int(pred)] if int(pred) < len(class_names) else f"Class {pred}"
+
+                    confidence = None
+                    probabilities = None
+                    if hasattr(model, 'predict_proba'):
+                        proba = model.predict_proba(features)[0]
+                        confidence = float(np.max(proba) * 100)
+                        probabilities = {class_names[i]: round(float(p) * 100, 1) for i, p in enumerate(proba)}
+
+                    disease_results[model_type] = {
+                        "prediction": predicted_class,
+                        "confidence": confidence,
+                        "probabilities": probabilities,
+                        "model_used": model_type
+                    }
+
+                except Exception as e:
+                    print(f"❌ Prediction error for {disease}-{model_type}: {e}")
+                    traceback.print_exc()
+                    disease_results[model_type] = {"error": str(e)}
+
+            predictions[disease] = disease_results
+
+        return jsonify({"predictions": predictions})
+
     except Exception as e:
-        print(f"Prediction failed: {str(e)}")
-        print(traceback.format_exc())
-        return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+        print(f"❌ Server Error: {e}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/predict-all', methods=['POST'])
-def predict_all():
-    """Predict all classifiers at once using default models"""
-    try:
-        print("\n=== Batch Prediction Request ===")
-        
-        # Get input data
-        input_data = request.get_json()
-        if not input_data:
-            return jsonify({'error': 'No input data provided'}), 400
-        
-        print(f"Input data: {input_data}")
-        
-        results = {}
-        
-        # Predict for each classifier
-        for classifier in AVAILABLE_CLASSIFIERS.keys():
-            try:
-                model_type = DEFAULT_MODELS[classifier]
-                print(f"\nProcessing {classifier} with {model_type}...")
-                
-                model = load_model(classifier, model_type)
-                X = prepare_input_dataframe(input_data)
-                predictions = model.predict(X)
-                
-                result = {
-                    'prediction': predictions.tolist(),
-                    'model': model_type
-                }
-                
-                # Add probabilities if available
-                if hasattr(model, 'predict_proba'):
-                    try:
-                        proba = model.predict_proba(X)
-                        result['probabilities'] = proba.tolist()
-                        result['class_labels'] = ['Negative', 'Positive']
-                    except Exception as e:
-                        print(f"Could not get probabilities for {classifier}: {str(e)}")
-                
-                results[classifier] = result
-                print(f"✓ {classifier} prediction: {predictions[0]}")
-                
-            except Exception as e:
-                print(f"✗ {classifier} failed: {str(e)}")
-                results[classifier] = {
-                    'error': str(e)
-                }
-        
-        print("=== Batch Request Complete ===\n")
-        return jsonify({
-            'predictions': results
-        }), 200
-        
-    except Exception as e:
-        print(f"Batch prediction failed: {str(e)}")
-        print(traceback.format_exc())
-        return jsonify({'error': f'Batch prediction failed: {str(e)}'}), 500
+# ---------------------- Run Flask ----------------------
+if __name__ == "__main__":
+    print("=" * 60)
+    print("🌐 Flask Server Ready on port 5001")
+    print("=" * 60)
+    print(f"📍 http://localhost:5001")
+    print(f"🔗 http://localhost:5001/api/predict")
+    print("=" * 60)
+    print("\nPress CTRL+C to stop\n")
 
-@app.route('/compare-models/<classifier>', methods=['POST'])
-def compare_models(classifier):
-    """Compare all models for a specific classifier"""
-    try:
-        if classifier not in AVAILABLE_CLASSIFIERS:
-            return jsonify({
-                'error': f'Invalid classifier. Must be one of: {", ".join(AVAILABLE_CLASSIFIERS.keys())}'
-            }), 400
-        
-        input_data = request.get_json()
-        if not input_data:
-            return jsonify({'error': 'No input data provided'}), 400
-        
-        X = prepare_input_dataframe(input_data)
-        results = {}
-        
-        # Test all models for this classifier
-        for model_type in AVAILABLE_CLASSIFIERS[classifier]:
-            try:
-                model = load_model(classifier, model_type)
-                predictions = model.predict(X)
-                
-                result = {
-                    'prediction': predictions.tolist()
-                }
-                
-                if hasattr(model, 'predict_proba'):
-                    try:
-                        proba = model.predict_proba(X)
-                        result['probabilities'] = proba.tolist()
-                    except:
-                        pass
-                
-                results[model_type] = result
-                
-            except Exception as e:
-                results[model_type] = {'error': str(e)}
-        
-        return jsonify({
-            'classifier': classifier,
-            'models': results
-        }), 200
-        
-    except Exception as e:
-        return jsonify({'error': f'Model comparison failed: {str(e)}'}), 500
-
-@app.route('/model-info/<classifier>', methods=['GET'])
-def model_info(classifier):
-    """Get model information"""
-    try:
-        if classifier not in AVAILABLE_CLASSIFIERS:
-            return jsonify({
-                'error': f'Invalid classifier. Must be one of: {", ".join(AVAILABLE_CLASSIFIERS.keys())}'
-            }), 400
-        
-        model_type = request.args.get('model', DEFAULT_MODELS[classifier])
-        
-        if model_type not in AVAILABLE_CLASSIFIERS[classifier]:
-            return jsonify({
-                'error': f'Invalid model type. Must be one of: {", ".join(AVAILABLE_CLASSIFIERS[classifier])}'
-            }), 400
-        
-        model = load_model(classifier, model_type)
-        
-        # Try to extract feature names
-        feature_names = get_feature_names_from_model(model)
-        
-        info = {
-            'classifier': classifier,
-            'model_type': model_type,
-            'available_models': AVAILABLE_CLASSIFIERS[classifier],
-            'has_predict_proba': hasattr(model, 'predict_proba')
-        }
-        
-        if feature_names:
-            info['features'] = feature_names
-            info['feature_count'] = len(feature_names)
-        
-        return jsonify(info), 200
-        
-    except FileNotFoundError as e:
-        return jsonify({'error': str(e)}), 404
-    except Exception as e:
-        return jsonify({'error': f'Failed to load model info: {str(e)}'}), 500
-
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'error': 'Endpoint not found'}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({'error': 'Internal server error'}), 500
-
-if __name__ == '__main__':
-    # Verify model directory exists
-    if not os.path.exists(MODEL_DIR):
-        print(f"⚠️  Warning: Model directory not found: {MODEL_DIR}")
-        print(f"Creating directory: {MODEL_DIR}")
-        os.makedirs(MODEL_DIR, exist_ok=True)
-    else:
-        print(f"✅ Model directory: {MODEL_DIR}")
-        # List available models
-        pkl_files = list(Path(MODEL_DIR).glob('classifier_*.pkl'))
-        print(f"✅ Found {len(pkl_files)} model files:")
-        for pkl_file in pkl_files:
-            print(f"   - {pkl_file.name}")
-    
-    # Run Flask app - IMPORTANT: Use 0.0.0.0 to accept external connections
-    port = int(os.getenv('PORT', 5001))
-    print(f"\n🚀 Python Classification Service starting on port {port}")
-    print(f"📍 Accessible at: http://localhost:{port}")
-    print(f"🌐 Also accessible at: http://127.0.0.1:{port}")
-    print(f"🔗 External connections: http://0.0.0.0:{port}\n")
-    
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=False, use_reloader=False)
