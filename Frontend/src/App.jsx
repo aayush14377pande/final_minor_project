@@ -5,20 +5,23 @@ import Home from "./Pages/Home";
 import Dashboard from "./Pages/Dashboard";
 import Prediction from "./Pages/Prediction";
 import React from "react";
-function App() {
+
+const App = () => {
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen bg-gradient-to-br from-[#000000] via-[#0a0a0a] to-[#1a1a1a] text-white">
       <Header />
-      <main className="flex-grow container mx-auto px-6 py-10 bg-gray-100">
+
+      <main className="flex-grow container mx-auto px-6 py-10">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/prediction" element={<Prediction />} />
         </Routes>
       </main>
+
       <Footer />
     </div>
   );
-}
+};
 
 export default App;

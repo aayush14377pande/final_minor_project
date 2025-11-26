@@ -1,87 +1,109 @@
 import React from "react";
 import { Heart, Activity, Droplet, Zap, BarChart3 } from "lucide-react";
 
-function Dashboard() {
+const Dashboard = () => {
   const vitals = [
-    { 
-      icon: <Heart className="w-6 h-6" />, 
-      label: "Heart Rate", 
-      value: "72 bpm", 
-      color: "text-red-500", 
-      bg: "bg-red-50" 
-    },
-    { 
-      icon: <Activity className="w-6 h-6" />, 
-      label: "Blood Pressure", 
-      value: "120/80 mmHg", 
-      color: "text-blue-500", 
-      bg: "bg-blue-50" 
-    },
-    { 
-      icon: <Droplet className="w-6 h-6" />, 
-      label: "Blood Glucose", 
-      value: "95 mg/dL", 
-      color: "text-purple-500", 
-      bg: "bg-purple-50" 
-    },
-    { 
-      icon: <Zap className="w-6 h-6" />, 
-      label: "Temperature", 
-      value: "98.6°F", 
-      color: "text-orange-500", 
-      bg: "bg-orange-50" 
-    }
+    { icon: <Heart className="w-7 h-7 text-[#F472B6]" />, label: "Heart Rate", value: "72 bpm", color: "from-[#2d0a11] to-[#1a1a1a]" },
+    { icon: <Activity className="w-7 h-7 text-[#60A5FA]" />, label: "Blood Pressure", value: "120/80 mmHg", color: "from-[#0a1a2d] to-[#1a1a1a]" },
+    { icon: <Droplet className="w-7 h-7 text-[#34D399]" />, label: "Blood Glucose", value: "95 mg/dL", color: "from-[#0a2d1a] to-[#1a1a1a]" },
+    { icon: <Zap className="w-7 h-7 text-[#A78BFA]" />, label: "Temperature", value: "98.6°F", color: "from-[#1d0a2d] to-[#1a1a1a]" },
   ];
 
   return (
-    <section className="max-w-6xl mx-auto px-4">
-      {/* Header */}
-      <div className="mb-8 text-center md:text-left">
-        <h2 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-3">
-          Patient Data Dashboard
-        </h2>
-        <p className="text-gray-600 text-lg">
-          Monitor vital parameters through interactive time series visualizations and real-time analytics.
+    <section className="max-w-6xl mx-auto px-4 text-white">
+
+      {/* ============================
+          🔥 POWER BI FIRST (HERO SECTION)
+      ============================ */}
+      <div
+        className="
+          bg-gradient-to-br from-[#0a0a0a] via-[#111111] to-[#1a1a1a]
+          backdrop-blur-xl rounded-3xl p-10 border border-white/10
+          shadow-[0_0_70px_rgba(147,51,234,0.25),0_0_40px_rgba(255,255,255,0.15)]
+          mb-14
+        "
+      >
+        <div className="text-center mb-6">
+          <div
+            className="
+              inline-flex p-6 rounded-full mb-6
+              bg-gradient-to-br from-[#3b82f6] to-[#9333ea]
+              border border-white/10
+              shadow-[0_0_75px_rgba(147,51,234,0.45)]
+            "
+          >
+            <BarChart3 className="w-16 h-16 text-white" />
+          </div>
+
+          <h2 className="text-4xl font-bold mb-3">Interactive Analytics Overview</h2>
+          <p className="text-gray-300 text-lg">
+            Power BI insights visualizing patient trends and metrics.
+          </p>
+        </div>
+
+        <iframe
+          title="Minor Project Dashboard"
+          width="100%"
+          height="540"
+          src="https://app.powerbi.com/reportEmbed?reportId=66d24b05-88a4-4d32-8c0e-a7febd1f5e02&autoAuth=true&ctid=0ed51ad7-52cc-4234-b54a-76b82d40b5c3"
+          frameBorder="0"
+          allowFullScreen
+          className="
+            rounded-2xl border border-white/10
+            shadow-[0_0_50px_rgba(255,255,255,0.22)]
+          "
+        ></iframe>
+      </div>
+
+      {/* ============================
+          ❤️ VITAL CARDS BELOW POWER BI
+      ============================ */}
+      <div
+        className="
+          mb-10 text-center 
+          bg-gradient-to-br from-[#111827] via-[#1f2937] to-[#0a0a0a]
+          backdrop-blur-2xl rounded-3xl p-8 border border-white/10
+          shadow-[0_0_55px_rgba(255,255,255,0.18),0_0_35px_rgba(96,165,250,0.25)]
+        "
+      >
+        <h2 className="text-4xl font-bold mb-3">Patient Vital Statistics</h2>
+        <p className="text-gray-300 text-lg">
+          Quick health metrics updated in real-time.
         </p>
       </div>
 
-      {/* Vital Stats Cards */}
-      <div className="grid md:grid-cols-4 sm:grid-cols-2 gap-6 mb-8">
+      {/* ---- VITAL CARDS ---- */}
+      <div className="grid md:grid-cols-4 sm:grid-cols-2 gap-6 mb-10">
         {vitals.map((vital, index) => (
-          <div 
-            key={index} 
-            className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow border border-gray-100"
+          <div
+            key={index}
+            className={`
+              bg-gradient-to-br ${vital.color}
+              backdrop-blur-xl rounded-2xl p-6 border border-white/10
+
+              shadow-[0_0_30px_rgba(255,255,255,0.14)]
+              hover:shadow-[0_0_60px_rgba(255,255,255,0.25)]
+              transition-all duration-500 hover:-translate-y-2
+            `}
           >
-            <div className={`${vital.bg} ${vital.color} w-12 h-12 rounded-xl flex items-center justify-center mb-4`}>
+            <div
+              className="
+                w-14 h-14 rounded-2xl flex items-center justify-center mb-4
+                bg-black/40 border border-white/10
+                shadow-[0_0_20px_rgba(255,255,255,0.2)]
+              "
+            >
               {vital.icon}
             </div>
-            <p className="text-sm text-gray-500 mb-1">{vital.label}</p>
-            <p className="text-2xl font-bold text-gray-800">{vital.value}</p>
+
+            <p className="text-sm text-gray-400 mb-2 font-medium">{vital.label}</p>
+            <p className="text-3xl font-bold text-white">{vital.value}</p>
           </div>
         ))}
       </div>
 
-      {/* Analytics Section */}
-      <div className="bg-white rounded-2xl p-8 md:p-12 shadow-lg border border-gray-100">
-        <div className="text-center">
-          <div className="inline-flex p-6 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full mb-6">
-            <BarChart3 className="w-16 h-16 text-blue-600" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-800 mb-3">Interactive Analytics</h3>
-
-          <iframe 
-            title="Minor Project Dashboard"
-            width="100%" 
-            height="541.25" 
-            src="https://app.powerbi.com/reportEmbed?reportId=66d24b05-88a4-4d32-8c0e-a7febd1f5e02&autoAuth=true&ctid=0ed51ad7-52cc-4234-b54a-76b82d40b5c3" 
-            frameBorder="0" 
-            allowFullScreen
-            className="rounded-xl shadow-md border border-gray-200"
-          ></iframe>
-        </div>
-      </div>
     </section>
   );
-}
+};
 
 export default Dashboard;
