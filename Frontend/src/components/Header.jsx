@@ -8,46 +8,40 @@ const Header = () => {
   const linkClass = (path) =>
     `px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
       location.pathname === path
-        ? "bg-gradient-to-r from-[#3b82f6]/30 via-[#8b5cf6]/30 to-[#1a1a1a] text-white shadow-xl scale-105"
-        : "text-gray-300 hover:text-white hover:bg-white/10"
+        ? "bg-gradient-to-r from-[#93c5fd]/50 via-[#c4b5fd]/50 to-[#e5e7eb] text-black shadow-md scale-105 border border-black/10"
+        : "text-gray-700 hover:text-black hover:bg-gray-200/60"
     }`;
 
   return (
     <header
       className="
-        /* 🎨 Add color tint to header background */
-        bg-gradient-to-br from-[#000000] via-[#0a0a0a] to-[#111111]
-        backdrop-blur-xl sticky top-0 z-50 border-b border-white/10
-
-        /* ⚡ White glow + Blue/Purple tint glow */
-        shadow-[0_0_75px_rgba(255,255,255,0.25),0_0_50px_rgba(115,108,254,0.35)]
+        bg-gradient-to-br from-[#ffffff] via-[#f8f8f8] to-[#eaeaea]
+        backdrop-blur-xl sticky top-0 z-50 border-b border-black/10
+        shadow-[0_2px_20px_rgba(0,0,0,0.08)]
       "
     >
       <div className="container mx-auto flex flex-col md:flex-row justify-between items-center py-5 px-6 gap-4">
 
-        {/* ICON BOX */}
+        {/* ICON + TITLE */}
         <div className="flex items-center space-x-3">
           <div
             className="
-              bg-gradient-to-br from-[#000000] via-[#0a0a0a] to-[#1a1a1a]
-              p-3 rounded-2xl border border-white/10
-
-              /* 🔵 Aqua + white glow */
-              shadow-[0_0_60px_rgba(52,211,153,0.55),0_0_45px_rgba(255,255,255,0.45)]
+              bg-white p-3 rounded-2xl border border-black/10
+              shadow-[0_0_15px_rgba(0,0,0,0.08)]
             "
           >
-            <Activity className="w-7 h-7 text-[#34D399]" />   {/* Mint Green Icon */}
+            <Activity className="w-7 h-7 text-[#34D399]" />
           </div>
 
           <div>
-            <h1 className="text-lg md:text-xl font-bold text-white">
+            <h1 className="text-lg md:text-xl font-bold text-black">
               Heart Disease Analytics
             </h1>
-            <p className="text-xs text-gray-400">ML & Power BI Integration</p>
+            <p className="text-xs text-gray-600">ML & Power BI Integration</p>
           </div>
         </div>
 
-        {/* NAV LINKS */}
+        {/* NAVIGATION LINKS */}
         <nav className="flex space-x-2">
           <Link to="/" className={linkClass("/")}>Home</Link>
           <Link to="/dashboard" className={linkClass("/dashboard")}>Dashboard</Link>

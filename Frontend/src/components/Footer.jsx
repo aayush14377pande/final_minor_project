@@ -1,19 +1,18 @@
 import React from "react";
-import { Activity } from "lucide-react";
 
 const Footer = () => {
   return (
     <footer
       className="
-        bg-gradient-to-br from-[#000000] via-[#0a0a0a] to-[#111111]
+        bg-gradient-to-br from-[#ffffff] via-[#f8f8f8] to-[#ededed]
         backdrop-blur-xl 
-        border-t border-white/10 
+        border-t border-black/10 
         py-6 
-        shadow-[0_-5px_20px_rgba(255,255,255,0.06)]
+        shadow-[0_-5px_20px_rgba(0,0,0,0.06)]
       "
     >
       <div className="container mx-auto px-6 text-center">
-        <p className="text-gray-300 text-sm">
+        <p className="text-gray-700 text-sm">
           © 2024 Heart Disease Analytics Platform. Powered by Machine Learning & Power BI.
         </p>
 

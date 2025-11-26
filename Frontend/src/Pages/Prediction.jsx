@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Heart, Activity, Info } from "lucide-react";
+import { Heart, Activity } from "lucide-react";
 
 const REQUIRED_FIELDS = ["age", "sex"];
 
@@ -60,43 +60,44 @@ const Prediction = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto text-white">
+    <div className="max-w-5xl mx-auto text-black">
 
-      {/* TOP SECTION CARD WITH STRONG SHADOW */}
+      {/* ===========================
+          TOP SECTION (LIGHT MODE)
+      =========================== */}
       <div
         className="
-          bg-gradient-to-br from-[#0d0d0d] via-[#111111] to-[#1a1a1a]
-          rounded-3xl p-10 border border-white/10 backdrop-blur-xl
-
-          /* 🌟 Beautiful white + blue glow */
-          shadow-[0_0_70px_rgba(255,255,255,0.18),0_0_55px_rgba(96,165,250,0.25)]
+          bg-gradient-to-br from-[#ffffff] via-[#f6f6f6] to-[#ececec]
+          rounded-3xl p-10 border border-black/10 backdrop-blur-xl
+          shadow-[0_0_35px_rgba(0,0,0,0.08)]
         "
       >
         <div className="text-center mb-10">
           <div
             className="
-              inline-flex p-5 rounded-full mb-5
-              bg-gradient-to-br from-[#1e3a8a] to-[#7c3aed]
-              border border-white/10
-
-              /* Icon glow */
-              shadow-[0_0_45px_rgba(147,51,234,0.45)]
+              inline-flex p-5 rounded-full mb-5 border border-black/10
+              bg-gradient-to-br from-[#3b82f6] to-[#9333ea]
+              shadow-[0_0_35px_rgba(147,51,234,0.32)]
             "
           >
             <Heart className="w-14 h-14 text-white" />
           </div>
 
-          <h1 className="text-4xl font-bold">Disease Risk Classifier</h1>
-          <p className="text-gray-300 mt-2">Enter patient details to evaluate risk levels.</p>
+          <h1 className="text-4xl font-bold text-black">Disease Risk Classifier</h1>
+          <p className="text-gray-700 mt-2">
+            Enter patient details to evaluate risk levels.
+          </p>
         </div>
 
-        {/* FORM */}
+        {/* ===========================
+            FORM INPUTS (LIGHT MODE)
+        =========================== */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
           {ALL_FIELDS.map((f) => (
             <div key={f.name}>
-              <label className="block text-sm mb-2 text-gray-300 font-semibold">
+              <label className="block text-sm mb-2 text-gray-700 font-semibold">
                 {f.label}
-                {f.required && <span className="text-blue-400 ml-1">*</span>}
+                {f.required && <span className="text-blue-600 ml-1">*</span>}
               </label>
 
               {f.type === "select" ? (
@@ -105,12 +106,10 @@ const Prediction = () => {
                   value={formData[f.name]}
                   onChange={handleChange}
                   className="
-                    w-full px-4 py-3 rounded-xl bg-[#0f0f0f]/70 text-white
-                    border border-white/10
+                    w-full px-4 py-3 rounded-xl bg-white text-black
+                    border border-black/20
                     focus:ring-2 focus:ring-blue-500/40
-
-                    /* Soft inside glow */
-                    shadow-[inset_0_0_25px_rgba(255,255,255,0.05)]
+                    shadow-[inset_0_0_10px_rgba(0,0,0,0.04)]
                   "
                 >
                   <option value="">Select</option>
@@ -125,10 +124,10 @@ const Prediction = () => {
                   value={formData[f.name]}
                   onChange={handleChange}
                   className="
-                    w-full px-4 py-3 rounded-xl bg-[#0f0f0f]/70 text-white
-                    border border-white/10
+                    w-full px-4 py-3 rounded-xl bg-white text-black
+                    border border-black/20
                     focus:ring-2 focus:ring-blue-500/40
-                    shadow-[inset_0_0_25px_rgba(255,255,255,0.05)]
+                    shadow-[inset_0_0_10px_rgba(0,0,0,0.04)]
                   "
                 />
               )}
@@ -136,18 +135,17 @@ const Prediction = () => {
           ))}
         </div>
 
-        {/* BUTTON WITH NICE SHADOW */}
+        {/* ===========================
+            PREDICT BUTTON
+        =========================== */}
         <button
           onClick={handlePredict}
           disabled={loading || !formData.age || !formData.sex}
           className="
             w-full py-4 rounded-2xl font-bold text-lg text-white
-            bg-gradient-to-r from-[#2563eb] to-[#7c3aed]
-
-            /* Button glow */
-            shadow-[0_0_35px_rgba(124,58,237,0.45)]
-
-            hover:shadow-[0_0_55px_rgba(124,58,237,0.6)]
+            bg-gradient-to-r from-[#2563eb] to-[#9333ea]
+            shadow-[0_0_25px_rgba(147,51,234,0.32)]
+            hover:shadow-[0_0_40px_rgba(147,51,234,0.45)]
             hover:scale-[1.02]
             transition disabled:opacity-50
           "
@@ -157,24 +155,26 @@ const Prediction = () => {
 
         {/* ERROR BOX */}
         {error && (
-          <div className="mt-6 p-4 rounded-xl border border-red-500/40 bg-red-500/10 text-red-300 shadow-[0_0_20px_rgba(255,0,0,0.25)]">
+          <div className="mt-6 p-4 rounded-xl border border-red-300 bg-red-100 text-red-700 shadow-[0_0_10px_rgba(255,0,0,0.15)]">
             {error}
           </div>
         )}
 
-        {/* RESULTS */}
+        {/* ===========================
+            RESULTS SECTION (LIGHT)
+        =========================== */}
         {predictions && (
           <div className="mt-10 space-y-8">
             {Object.entries(predictions).map(([disease, models]) => (
               <div
                 key={disease}
                 className="
-                  p-6 rounded-2xl bg-[#0f0f0f]/60 border border-white/10
-                  shadow-[0_0_45px_rgba(96,165,250,0.2)]
+                  p-6 rounded-2xl bg-white border border-black/10
+                  shadow-[0_0_25px_rgba(0,0,0,0.06)]
                 "
               >
-                <h2 className="font-bold text-2xl mb-5 flex items-center gap-2">
-                  <Activity className="w-6 h-6 text-blue-400" />
+                <h2 className="font-bold text-2xl mb-5 flex items-center gap-2 text-black">
+                  <Activity className="w-6 h-6 text-blue-600" />
                   {disease.replace("_Class", "")}
                 </h2>
 
@@ -183,24 +183,21 @@ const Prediction = () => {
                     <div
                       key={modelType}
                       className="
-                        p-5 rounded-xl bg-[#000]/40 border border-white/10
-
-                        /* Card glow */
-                        shadow-[0_0_35px_rgba(124,58,237,0.25)]
-
-                        hover:shadow-[0_0_55px_rgba(124,58,237,0.4)]
+                        p-5 rounded-xl bg-gray-50 border border-black/10 
+                        shadow-[0_0_15px_rgba(0,0,0,0.05)]
+                        hover:shadow-[0_0_25px_rgba(0,0,0,0.1)]
                         hover:-translate-y-1 transition
                       "
                     >
-                      <div className="flex justify-between mb-3">
+                      <div className="flex justify-between mb-3 text-black">
                         <span className="font-semibold">{modelType}</span>
 
                         {result.error ? (
-                          <span className="text-red-400 text-xs">{result.error}</span>
+                          <span className="text-red-500 text-xs">{result.error}</span>
                         ) : (
                           <span className="
                             px-3 py-1 text-xs font-bold rounded-full
-                            bg-gradient-to-r from-blue-500 to-purple-500
+                            bg-gradient-to-r from-blue-500 to-purple-500 text-white
                           ">
                             {result.prediction}
                           </span>
@@ -209,19 +206,18 @@ const Prediction = () => {
 
                       {!result.error && (
                         <>
-                          {/* Confidence bar */}
+                          {/* Confidence */}
                           {result.confidence && (
                             <div className="mb-3">
-                              <div className="flex justify-between text-xs mb-1">
-                                <span className="text-gray-400">Confidence</span>
+                              <div className="flex justify-between text-xs mb-1 text-gray-600">
+                                <span>Confidence</span>
                                 <span>{result.confidence.toFixed(1)}%</span>
                               </div>
 
-                              <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
+                              <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
                                 <div
                                   className="
-                                    h-3 bg-gradient-to-r from-blue-400 to-purple-500
-                                    shadow-[0_0_15px_rgba(124,58,237,0.35)]
+                                    h-3 bg-gradient-to-r from-blue-500 to-purple-500
                                   "
                                   style={{ width: `${result.confidence}%` }}
                                 ></div>
@@ -231,11 +227,11 @@ const Prediction = () => {
 
                           {/* Probabilities */}
                           {result.probabilities && (
-                            <div className="text-xs space-y-1 mt-3">
+                            <div className="text-xs space-y-1 mt-3 text-gray-700">
                               {Object.entries(result.probabilities).map(([cls, prob]) => (
                                 <div key={cls} className="flex justify-between">
                                   <span>{cls}</span>
-                                  <span className="font-bold">{prob.toFixed(1)}%</span>
+                                  <span className="font-bold text-black">{prob.toFixed(1)}%</span>
                                 </div>
                               ))}
                             </div>
